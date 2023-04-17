@@ -1,66 +1,60 @@
-#include <ros.h>
-#include <std_msgs/Float32MultiArray.h>
-#include <Servo.h>
 #include <Wire.h>
-#include <MPU6050.h>
+#include <Servo.h>
 
-MPU6050 mpu;
+#define MPU6050_ADDR 0x68
+#define MPU6050_REG_PWR_MGMT_1 0x6B
+#define MPU6050_REG_ACCEL_XOUT_H 0x3B
+#define MPU6050_REG_ACCEL_YOUT_H 0x3D
+#define MPU6050_REG_ACCEL_ZOUT_H 0x3F
+#define MPU6050_REG_GYRO_XOUT_H 0x43
+#define MPU6050_REG_GYRO_YOUT_H 0x45
+#define MPU6050_REG_GYRO_ZOUT_H 0x47
+
 Servo servo1;
 Servo servo2;
-ros::NodeHandle nh;
-std_msgs::Float32MultiArray imuData;
+
+int16_t accel_x, accel_y, accel_z;
+int16_t gyro_x, gyro_y, gyro_z;
 
 void setup() {
-  // Инициализация I2C
-  Wire.begin();
-
-  // Инициализация MPU6050
-  mpu.initialize();
-
-  // Инициализация сервоприводов
   servo1.attach(9);
   servo2.attach(10);
 
-  // Инициализация ROS
-  nh.initNode();
-  nh.advertise("imu_data", &imuData);
+  Wire.begin();
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(MPU6050_REG_PWR_MGMT_1);
+  Wire.write(0);
+  Wire.endTransmission(true);
 
-  // Инициализация генератора случайных чисел
-  randomSeed(analogRead(A0));
+  servo1.write(90);
+  servo2.write(90);
+
+  delay(1000);
 }
 
 void loop() {
-  // Генерация случайных углов поворота сервоприводов в диапазоне [-90, 90]
-  int servo1Angle = random(-90, 91);
-  int servo2Angle = random(-90, 91);
-  
-  // Управление сервоприводами
-  servo1.write(servo1Angle);
-  servo2.write(servo2Angle);
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(MPU6050_REG_ACCEL_XOUT_H);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU6050_ADDR, 14, true);
 
-  // Чтение данных с MPU6050
-  int16_t ax, ay, az, gx, gy, gz;
-  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+  accel_x = Wire.read() << 8 | Wire.read();
+  accel_y = Wire.read() << 8 | Wire.read();
+  accel_z = Wire.read() << 8 | Wire.read();
 
-  // Преобразование данных в градусы
-  float accX = ax / 16384.0;
-  float accY = ay / 16384.0;
-  float accZ = az / 16384.0;
-  float gyroX = gx / 131.0;
-  float gyroY = gy / 131.0;
-  float gyroZ = gz / 131.0;
+  gyro_x = Wire.read() << 8 | Wire.read();
+  gyro_y = Wire.read() << 8 | Wire.read();
+  gyro_z = Wire.read() << 8 | Wire.read();
 
-  // Отправка данных на Raspberry Pi через ROS
-  imuData.data_length = 6;
-  imuData.data[0] = accX;
-  imuData.data[1] = accY;
-  imuData.data[2] = accZ;
-  imuData.data[3] = gyroX;
-  imuData.data[4] = gyroY;
-  imuData.data[5] = gyroZ;
-  imuData.layout.dim[0].size = 6;
-  imuData.layout.dim[0].stride = 6;
-  nh.publish(&imuData);
+  int angle1 = map(accel_x, -16384, 16384, 0, 180);
+  int angle2 = map(accel_y, -16384, 16384, 0, 180);
 
-  nh.spinOnce(); // Обработка ROS-сообщений
+  angle1 = constrain(angle1, 0, 90);
+  angle2 = constrain(angle2, 0, 90);
+
+  servo1.write(random(angle1, angle1 + 90));
+  servo2.write(random(angle2, angle2 + 90));
+
+  delay(1000);
 }
+
