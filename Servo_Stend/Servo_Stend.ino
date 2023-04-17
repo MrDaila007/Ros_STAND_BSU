@@ -5,7 +5,7 @@ MPU6050 mpu;
 Servo servo1;
 Servo servo2;
 
-#define MY_PERIOD 500  // период в мс
+#define MY_PERIOD 10000  // период в мс
 uint32_t tmr1;         // переменная таймера
 
 int servo1Angle = 90;
